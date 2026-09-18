@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,6 +41,11 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 	`
 	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, RoleUser).Scan(&userID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return uuid.Nil, ErrEmailAlreadyExists
+		}
 		return uuid.Nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -47,7 +54,7 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 		INSERT INTO user_details ( user_id, full_name) 
 		VALUES ($1, $2)
 	`
-	_, err = r.db.Exec(ctx, userDetails, userID, req.FullName)
+	_, err = tx.Exec(ctx, userDetails, userID, req.FullName)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to insert user details: %w", err)
 	}
@@ -79,6 +86,11 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	`
 	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, RoleVenueAdmin).Scan(&userID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return uuid.Nil, ErrEmailAlreadyExists
+		}
 		return uuid.Nil, fmt.Errorf("failed to create venue admin: %w", err)
 	}
 
@@ -87,7 +99,7 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 		INSERT INTO venue_details ( user_id, venue_name, address, city, total_screens) 
 		VALUES ($1, $2)
 	`
-	_, err = r.db.Exec(ctx, userDetails, userID, req.VenueName, req.Address, req.City, req.TotalScreens)
+	_, err = tx.Exec(ctx, userDetails, userID, req.VenueName, req.Address, req.City, req.TotalScreens)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to insert venue details: %w", err)
 	}
