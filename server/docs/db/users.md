@@ -8,17 +8,17 @@ Base authentication details for all users.
 
 | Attribute | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | UUID | PRIMARY KEY, NOT NULL | User ID |
+| `id` | UUID | PRIMARY KEY, NOT NULL, DEFAULT `UUID()` | User ID |
 | `email` | Text | UNIQUE, NOT NULL | Login email |
-| `phone_UUID` | Text | UNIQUE | Contact UUID |
+| `phone_number` | Text | NOT NULL | Contact UUID |
 | `password_hash` | Text | NOT NULL | Hashed password |
 | `role` | Text | NOT NULL, DEFAULT `'user'` | Access role ("user" ,"venue_admin", "super_admin") |
 | `is_active` | Boolean | DEFAULT `TRUE` | Active status |
 | `is_email_verified` | Boolean | DEFAULT `FALSE` | Email verification status |
 | `is_phone_verified` | Boolean | DEFAULT `FALSE` | Phone verification status |
-| `last_login_at` | Time | NULL | Last login time |
-| `created_at` | Time | DEFAULT `NOW()` | Creation time |
-| `updated_at` | Time | DEFAULT `NOW()` | Update time |
+| `last_login_at` | TIMESTAMPZ | NULL | Last login time |
+| `created_at` | TIMESTAMPZ | DEFAULT `NOW()` | Creation time |
+| `updated_at` | TIMESTAMPZ | DEFAULT `NOW()` | Update time |
 
 ---
 
@@ -30,7 +30,7 @@ Profiel details for end users with role `user`
 | `id` | UUID | PRIMARY KEY, NOT NULL | Profile ID |
 | `user_id` | UUID | FK (`users`), UNIQUE, NOT NULL | Linked user |
 | `full_name` | Text | NOT NULL | Customer name |
-| `updated_at` | Time | DEFAULT `NOW()` | Update time |
+| `updated_at` | TIMESTAMPZ | DEFAULT `NOW()` | Update time |
 
 ---
 
@@ -48,11 +48,11 @@ Profile details for venue or theaters with role `venue_admin`
 | `total_screens` | NUMBER | NOT NULL, DEFAULT `1` | Screen count |
 | `venue_status` | Text | NOT NULL, DEFAULT `'pending'` | Approval state ("pending", "approved", "rejected") |
 | `approved_by` | UUID | FK (`users`), NULL | Approver admin |
-| `approved_at` | Time | NULL | Approval time |
+| `approved_at` | TIMESTAMPZ | NULL | Approval time |
 | `rejected_by` | UUID | FK (`users`), NULL | Rejecter admin |
-| `rejected_at` | Time | NULL | Rejection time |
-| `venue_created_at` | Time | DEFAULT `NOW()` | Creation time |
-| `venue_updated_at` | Time | DEFAULT `NOW()` | Update time |
+| `rejected_at` | TIMESTAMPZ | NULL | Rejection time |
+| `venue_created_at` | TIMESTAMPZ | DEFAULT `NOW()` | Creation time |
+| `venue_updated_at` | TIMESTAMPZ | DEFAULT `NOW()` | Update time |
 
 ---
 
@@ -65,8 +65,8 @@ Profile details for platform admin with role `super_admin`
 | `user_id` | UUID | FK (`users`), UNIQUE, NOT NULL | Linked admin |
 | `full_name` | Text | NOT NULL | Admin name |
 | `is_root_user` | Boolean | DEFAULT `FALSE` | Root user flag |
-| `admin_created_at` | Time | DEFAULT `NOW()` | Creation time |
-| `admin_updated_at` | Time | DEFAULT `NOW()` | Update time |
+| `admin_created_at` | TIMESTAMPZ | DEFAULT `NOW()` | Creation time |
+| `admin_updated_at` | TIMESTAMPZ | DEFAULT `NOW()` | Update time |
 
 ---
 
