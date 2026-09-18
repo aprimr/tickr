@@ -58,9 +58,6 @@ func (req *VenueRegisterRequest) Validate() map[string]string {
 	if !validate.IsValidPassword(req.Password) {
 		errs["password"] = "password must be at least 8 characters long and contain at least one number and one special character (! @ # $ % ^ & * ? )"
 	}
-	if !validate.IsNotBlank(req.VenueName) {
-		errs["venue_name"] = "venue name is required"
-	}
 	if !validate.IsMinLength(req.VenueName, 5) {
 		errs["venue_name"] = "venue name must be atleast 5 characters long"
 	}

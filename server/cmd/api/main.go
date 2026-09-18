@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aprimr/tickr/internal/auth"
 	"github.com/aprimr/tickr/internal/db"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -34,6 +35,16 @@ func main() {
 	// Global middlewares
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// Auth Dependencies
+	authRepo := auth.NewAuthRepository(dbPool)
+	authService := auth.NewAuthService(authRepo)
+	authHandler := auth.NewAuthHandler(authService)
+
+	// Routes
+	r.Route("/v1", func(r chi.Router) {
+		auth.Routes(r, authHandler)
+	})
 
 	// Health route
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
