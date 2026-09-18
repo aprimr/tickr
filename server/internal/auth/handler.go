@@ -2,8 +2,11 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 
+	er "github.com/aprimr/tickr/internal/pkg/errors"
 	"github.com/aprimr/tickr/internal/pkg/response"
 )
 
@@ -14,17 +17,22 @@ type AuthHandler interface {
 
 type authHandler struct {
 	service AuthService
+	log     *slog.Logger
 }
 
-func NewAuthHandler(service AuthService) AuthHandler {
-	return &authHandler{service: service}
+func NewAuthHandler(service AuthService, logger *slog.Logger) AuthHandler {
+	return &authHandler{
+		service: service,
+		log:     logger,
+	}
 }
 
 // HandleUserRegister handles user registration
 func (h *authHandler) HandleUserRegister(w http.ResponseWriter, r *http.Request) {
 	var req UserRegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		h.log.Warn("failed to decode user registration request", "error", err)
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
 		return
 	}
 
@@ -35,7 +43,13 @@ func (h *authHandler) HandleUserRegister(w http.ResponseWriter, r *http.Request)
 
 	userID, err := h.service.RegisterUser(r.Context(), req)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "internal server error", err.Error())
+		if errors.Is(err, ErrEmailAlreadyExists) {
+			response.Error(w, http.StatusConflict, ErrEmailAlreadyExists.Error(), map[string]string{"email": "an account with this email already exists"})
+			return
+		}
+
+		h.log.Error("failed to register user", "error", err, "email", req.Email)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
 		return
 	}
 
@@ -49,7 +63,8 @@ func (h *authHandler) HandleUserRegister(w http.ResponseWriter, r *http.Request)
 func (h *authHandler) HandleVenueAdminRegister(w http.ResponseWriter, r *http.Request) {
 	var req VenueRegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body", err.Error())
+		h.log.Warn("failed to decode user registration request", "error", err)
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
 		return
 	}
 
@@ -60,7 +75,13 @@ func (h *authHandler) HandleVenueAdminRegister(w http.ResponseWriter, r *http.Re
 
 	userID, err := h.service.RegisterVenueAdmin(r.Context(), req)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "internal server error", err.Error())
+		if errors.Is(err, ErrEmailAlreadyExists) {
+			response.Error(w, http.StatusConflict, ErrEmailAlreadyExists.Error(), map[string]string{"email": "an account with this email already exists"})
+			return
+		}
+
+		h.log.Error("failed to register user", "error", err, "email", req.Email)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
 		return
 	}
 
