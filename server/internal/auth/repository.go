@@ -44,7 +44,7 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 
 	// Insert the details of the user in user_details table
 	userDetails := `
-		INSERT INTO user_details ( user_id, fullname) 
+		INSERT INTO user_details ( user_id, full_name) 
 		VALUES ($1, $2)
 	`
 	_, err = r.db.Exec(ctx, userDetails, userID, req.FullName)

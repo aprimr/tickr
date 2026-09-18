@@ -28,7 +28,7 @@ func (h *authHandler) HandleUserRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if validationErr := req.Validate(); validationErr != nil {
+	if validationErr := req.Validate(); len(validationErr) > 0 {
 		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
 		return
 	}
@@ -53,7 +53,7 @@ func (h *authHandler) HandleVenueAdminRegister(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if validationErr := req.Validate(); validationErr != nil {
+	if validationErr := req.Validate(); len(validationErr) > 0 {
 		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
 		return
 	}
