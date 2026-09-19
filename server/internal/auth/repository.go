@@ -97,7 +97,7 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	// Insert the details of the venue in venue_details table
 	userDetails := `
 		INSERT INTO venue_details ( user_id, venue_name, address, city, total_screens) 
-		VALUES ($1, $2)
+		VALUES ($1, $2, $3, $4, $5)
 	`
 	_, err = tx.Exec(ctx, userDetails, userID, req.VenueName, req.Address, req.City, req.TotalScreens)
 	if err != nil {
