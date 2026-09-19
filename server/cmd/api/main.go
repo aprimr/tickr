@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/aprimr/tickr/internal/auth"
 	"github.com/aprimr/tickr/internal/db"
+	appMiddleware "github.com/aprimr/tickr/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,6 +25,11 @@ func main() {
 		fmt.Printf("Not found or failed to load env: %v\n", err)
 	}
 
+	// Init slog
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+
 	// Connect to database
 	var dbPool *pgxpool.Pool
 	if dbPool, err = db.Connect(context.Background()); err != nil {
@@ -32,6 +39,9 @@ func main() {
 
 	r := chi.NewRouter()
 
+	// CORS middleware
+	r.Use(appMiddleware.SetupCors(logger))
+
 	// Global middlewares
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -39,7 +49,7 @@ func main() {
 	// Auth Dependencies
 	authRepo := auth.NewAuthRepository(dbPool)
 	authService := auth.NewAuthService(authRepo)
-	authHandler := auth.NewAuthHandler(authService)
+	authHandler := auth.NewAuthHandler(authService, logger)
 
 	// Routes
 	r.Route("/v1", func(r chi.Router) {
