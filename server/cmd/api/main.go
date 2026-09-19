@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/aprimr/tickr/internal/auth"
 	"github.com/aprimr/tickr/internal/db"
+	"github.com/aprimr/tickr/internal/health"
 	appMiddleware "github.com/aprimr/tickr/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -46,33 +46,21 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Auth Dependencies
+	// Auth Route Dependencies
 	authRepo := auth.NewAuthRepository(dbPool)
 	authService := auth.NewAuthService(authRepo)
 	authHandler := auth.NewAuthHandler(authService, logger)
 
+	// Health Route Dependency
+	healthHandler := health.NewHealthHandler(dbPool)
+
 	// Routes
 	r.Route("/v1", func(r chi.Router) {
-		auth.Routes(r, authHandler)
+		auth.RegisterRoutes(r, authHandler)
 	})
 
 	// Health route
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-
-		if err := dbPool.Ping(ctx); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"error", "database":"unreachable"}`))
-
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok", "database":"connected"}`))
-	})
+	health.RegisterRoutes(r, healthHandler)
 
 	// Start the server and listen to port
 	port := os.Getenv("PORT")
