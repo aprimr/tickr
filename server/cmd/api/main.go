@@ -45,6 +45,7 @@ func main() {
 	// Global middlewares
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.ClientIPFromXFF("10.0.0.0/8"))
 
 	// Auth Route Dependencies
 	authRepo := auth.NewAuthRepository(dbPool)
