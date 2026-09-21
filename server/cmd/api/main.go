@@ -12,6 +12,7 @@ import (
 	"github.com/aprimr/tickr/internal/db"
 	"github.com/aprimr/tickr/internal/health"
 	appMiddleware "github.com/aprimr/tickr/internal/middleware"
+	"github.com/aprimr/tickr/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,9 +31,18 @@ func main() {
 		Level: slog.LevelDebug,
 	}))
 
+	// Root context for server shutdown signal
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Init worker pool
+	workerPool := worker.NewPool(100, logger)
+	workerPool.Start(ctx, 4)
+	defer workerPool.Stop()
+
 	// Connect to database
 	var dbPool *pgxpool.Pool
-	if dbPool, err = db.Connect(context.Background()); err != nil {
+	if dbPool, err = db.Connect(ctx); err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer dbPool.Close()
