@@ -10,6 +10,7 @@ import (
 
 	"github.com/aprimr/tickr/internal/auth"
 	"github.com/aprimr/tickr/internal/db"
+	"github.com/aprimr/tickr/internal/email"
 	"github.com/aprimr/tickr/internal/health"
 	appMiddleware "github.com/aprimr/tickr/internal/middleware"
 	"github.com/aprimr/tickr/internal/worker"
@@ -39,6 +40,18 @@ func main() {
 	workerPool := worker.NewPool(100, logger)
 	workerPool.Start(ctx, 4)
 	defer workerPool.Stop()
+
+	// Init email service
+	_ = email.InitBrevo(logger)
+	// workerPool.Enqueue(
+	// 	func(ctx context.Context) error {
+	// 		return mailer.SendEmail(
+	// 			"test@gmail.com",
+	// 			"testing",
+	// 			templates.AccountVerification("Hello", "9090"),
+	// 		)
+	// 	},
+	// )
 
 	// Connect to database
 	var dbPool *pgxpool.Pool
