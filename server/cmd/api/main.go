@@ -42,16 +42,18 @@ func main() {
 	defer workerPool.Stop()
 
 	// Init email service
-	_ = email.InitBrevo(logger)
-	// workerPool.Enqueue(
-	// 	func(ctx context.Context) error {
-	// 		return mailer.SendEmail(
-	// 			"test@gmail.com",
-	// 			"testing",
-	// 			templates.AccountVerification("Hello", "9090"),
-	// 		)
-	// 	},
-	// )
+	mailer := email.InitBrevo(logger)
+	workerPool.Enqueue(
+		func(ctx context.Context) error {
+			body, _ := email.AccountVerification("Hello", "99009")
+
+			return mailer.SendEmail(
+				"aprimregmi24@gmail.com",
+				"testing",
+				body,
+			)
+		},
+	)
 
 	// Connect to database
 	var dbPool *pgxpool.Pool

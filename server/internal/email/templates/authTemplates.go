@@ -1,14 +1,15 @@
 package templates
 
-import "fmt"
+import "html/template"
 
-// AccountVerification generates the HTML body for the email verification OTP
-func AccountVerification(name, otp string) string {
-	return fmt.Sprintf(`
-		<div>
-			<h2>Welcome to Tickr, %s!</h2>
-			<p>Thanks for signing up. Please use the verification code below to verify your account:</p>
-			<div>%s</div>
-		</div>
-	`, name, otp)
-}
+// AccountVerificationTemplate is the raw HTTP string for the account verification OTP email
+const AccountVerificationTemplate = `
+<div>
+	<h2>Welcome to Tickr, {{.Name}}!</h2>
+	<p>Thanks for signing up. Please use the verification code below to verify your account:</p>
+	<div style="font-size: 24px; font-weight: bold;">{{.OTP}}</div>
+</div>
+`
+
+// Parse string to HTML template
+var AccountVerification = template.Must(template.New("verification").Parse(AccountVerificationTemplate))
