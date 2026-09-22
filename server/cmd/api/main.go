@@ -42,7 +42,7 @@ func main() {
 	defer workerPool.Stop()
 
 	// Init email service
-	_ = email.NewEmailService(workerPool, logger)
+	mailer := email.NewEmailService(workerPool, logger)
 
 	// Connect to database
 	var dbPool *pgxpool.Pool
@@ -63,7 +63,7 @@ func main() {
 
 	// Auth Route Dependencies
 	authRepo := auth.NewAuthRepository(dbPool)
-	authService := auth.NewAuthService(authRepo)
+	authService := auth.NewAuthService(authRepo, mailer)
 	authHandler := auth.NewAuthHandler(authService, logger)
 
 	// Health Route Dependency

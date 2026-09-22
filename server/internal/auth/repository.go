@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/aprimr/tickr/internal/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AuthRepository interface {
-	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash string) (uuid.UUID, error)
-	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash string) (uuid.UUID, error)
+	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
+	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 }
 
 type authRepository struct {
@@ -24,7 +26,7 @@ func NewAuthRepository(db *pgxpool.Pool) AuthRepository {
 }
 
 // CreateUser handles user registration transaction for end users
-func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest, password_hash string) (uuid.UUID, error) {
+func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error) {
 	// Begin database transction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -59,6 +61,17 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 		return uuid.Nil, fmt.Errorf("failed to insert user details: %w", err)
 	}
 
+	// Insert hashedOtp in the otps table
+	insertOTP := `
+		INSERT INTO otps (user_id, hashed_otp, type, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err = tx.Exec(ctx, insertOTP, userID, otp_hash, domain.OTPTypeAccountVerification, time.Now().Add(15*time.Minute))
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to insert otp: %w", err)
+	}
+
 	// Commit transaction
 	err = tx.Commit(ctx)
 	if err != nil {
@@ -69,7 +82,7 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 }
 
 // CreateVenueAdmin handles the registration for the venue admin
-func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash string) (uuid.UUID, error) {
+func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error) {
 	// Begin database transction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -102,6 +115,17 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	_, err = tx.Exec(ctx, userDetails, userID, req.VenueName, req.Address, req.City, req.TotalScreens)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to insert venue details: %w", err)
+	}
+
+	// Insert hashedOtp in the otps table
+	insertOTP := `
+		INSERT INTO otps (user_id, hashed_otp, type, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err = tx.Exec(ctx, insertOTP, userID, otp_hash, domain.OTPTypeAccountVerification, time.Now().Add(15*time.Minute))
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to insert otp: %w", err)
 	}
 
 	// Commit transaction
