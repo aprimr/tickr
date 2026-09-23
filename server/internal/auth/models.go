@@ -3,6 +3,7 @@ package auth
 import (
 	"time"
 
+	"github.com/aprimr/tickr/internal/domain"
 	"github.com/google/uuid"
 )
 
@@ -65,4 +66,14 @@ type AdminDetails struct {
 	IsRootUser     bool      `db:"is_root_user"`
 	AdminCreatedAt time.Time `db:"admin_created_at"`
 	AdminUpdatedAt time.Time `db:"admin_updated_at"`
+}
+
+type OTP struct {
+	ID        uuid.UUID      `db:"id"`
+	UserID    uuid.UUID      `db:"user_id"`
+	HashedOTP string         `db:"hashed_otp"`
+	Type      domain.OTPType `db:"type"`
+	IsUsed    bool           `db:"is_used"`
+	ExpiresAt time.Time      `db:"expires_at"`
+	CreatedAt time.Time      `db:"created_at"`
 }

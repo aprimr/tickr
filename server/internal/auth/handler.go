@@ -13,6 +13,8 @@ import (
 type AuthHandler interface {
 	HandleUserRegister(w http.ResponseWriter, r *http.Request)
 	HandleVenueAdminRegister(w http.ResponseWriter, r *http.Request)
+
+	HandleVerifyAccount(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -89,4 +91,36 @@ func (h *authHandler) HandleVenueAdminRegister(w http.ResponseWriter, r *http.Re
 		"user_id": userID,
 	}
 	response.JSON(w, http.StatusCreated, "registration successful", res)
+}
+
+// HandleVerifyAccount handles the account verification request
+func (h *authHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request) {
+	var req VerifyAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	err := h.service.VerifyUserAccount(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, ErrInvalidOrExpiredOTP) {
+			response.Error(w, http.StatusBadRequest, "invalid or expired OTP", nil)
+			return
+		}
+		if errors.Is(err, ErrUserNotFound) {
+			response.Error(w, http.StatusNotFound, "user not found", nil)
+			return
+		}
+
+		h.log.Error("failed to verify user account", "error", err, "user_id", req.UserID)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "verification successful", nil)
 }

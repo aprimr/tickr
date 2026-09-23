@@ -13,7 +13,6 @@ CREATE TABLE users (
   role user_role NOT NULL DEFAULT 'user',
   is_active BOOLEAN DEFAULT TRUE,
   is_email_verified BOOLEAN DEFAULT FALSE,
-  is_phone_verified BOOLEAN DEFAULT FALSE,
   last_login_at TIMESTAMPTZ NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

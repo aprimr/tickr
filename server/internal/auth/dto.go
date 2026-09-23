@@ -1,28 +1,36 @@
 package auth
 
-import "github.com/aprimr/tickr/internal/pkg/validate"
+import (
+	"github.com/aprimr/tickr/internal/pkg/validate"
+	"github.com/google/uuid"
+)
 
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required"`
-	Password string `json:"password" validate:"required"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type UserRegisterRequest struct {
-	FullName    string `json:"fullname" validate:"required"`
-	Email       string `json:"email" validate:"required"`
-	PhoneNumber string `json:"phone_number" validate:"required"`
-	Password    string `json:"password" validate:"required"`
+	FullName    string `json:"fullname"`
+	Email       string `json:"email"`
+	PhoneNumber string `json:"phone_number"`
+	Password    string `json:"password"`
 }
 
 type VenueRegisterRequest struct {
-	Email       string `json:"email" validate:"required"`
-	PhoneNumber string `json:"phone_number" validate:"required"`
-	Password    string `json:"password" validate:"required"`
+	Email       string `json:"email"`
+	PhoneNumber string `json:"phone_number"`
+	Password    string `json:"password"`
 
-	VenueName    string `json:"venue_name" validate:"required"`
-	Address      string `json:"address" validate:"required"`
-	City         string `json:"city" validate:"required"`
-	TotalScreens int    `json:"total_screens" validate:"required, min=1"`
+	VenueName    string `json:"venue_name"`
+	Address      string `json:"address"`
+	City         string `json:"city"`
+	TotalScreens int    `json:"total_screens"`
+}
+
+type VerifyAccountRequest struct {
+	UserID uuid.UUID `json:"user_id"`
+	OTP    string    `json:"otp"`
 }
 
 // Validate UserRegisterRequest data
@@ -71,5 +79,20 @@ func (req *VenueRegisterRequest) Validate() map[string]string {
 		errs["total_screens"] = "total screens must be at least 1"
 	}
 
+	return errs
+}
+
+// Validate VerifyAccountRequest data
+func (req *VerifyAccountRequest) Validate() map[string]string {
+	errs := make(map[string]string)
+
+	if req.UserID == uuid.Nil {
+		errs["user_id"] = "user_id is required"
+	}
+	if req.OTP == "" {
+		errs["otp"] = "otp is required"
+	} else if len(req.OTP) != 6 {
+		errs["otp"] = "otp must be 6 characters long"
+	}
 	return errs
 }

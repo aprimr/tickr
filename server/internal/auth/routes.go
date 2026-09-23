@@ -12,4 +12,6 @@ func RegisterRoutes(r chi.Router, handler AuthHandler) {
 
 	r.Post("/users", handler.HandleUserRegister)
 	r.Post("/venues", handler.HandleVenueAdminRegister)
+
+	r.Post("/verify", handler.HandleVerifyAccount)
 }

@@ -2,16 +2,21 @@ package auth
 
 import (
 	"context"
+	"errors"
 
+	"github.com/aprimr/tickr/internal/domain"
 	"github.com/aprimr/tickr/internal/email"
 	"github.com/aprimr/tickr/internal/utils/hash"
 	"github.com/aprimr/tickr/internal/utils/otp"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type AuthService interface {
 	RegisterUser(ctx context.Context, req UserRegisterRequest) (uuid.UUID, error)
 	RegisterVenueAdmin(ctx context.Context, req VenueRegisterRequest) (uuid.UUID, error)
+
+	VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error
 }
 
 type authService struct {
@@ -89,4 +94,30 @@ func (s *authService) RegisterVenueAdmin(ctx context.Context, req VenueRegisterR
 	_ = s.mailer.SendAccountVerificationEmail(req.Email, req.VenueName, otpString)
 
 	return userID, nil
+}
+
+func (s *authService) VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error {
+
+	// Fetch the active OTP from database
+	otpRecord, err := s.repo.GetActiveOTP(ctx, req.UserID, domain.OTPTypeAccountVerification)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidOrExpiredOTP
+		}
+		return err
+	}
+
+	// Compare plain OTP with the hashedOTP
+	match := hash.CheckString(req.OTP, otpRecord.HashedOTP)
+	if !match {
+		return ErrInvalidOrExpiredOTP
+	}
+
+	// Mark OTP as used and verify user account
+	err = s.repo.MarkOTPAsUsedAndVerifyUser(ctx, otpRecord.ID, req.UserID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

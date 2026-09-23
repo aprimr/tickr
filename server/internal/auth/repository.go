@@ -15,6 +15,9 @@ import (
 type AuthRepository interface {
 	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
+
+	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (OTP, error)
+	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
 }
 
 type authRepository struct {
@@ -135,4 +138,62 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	}
 
 	return userID, nil
+}
+
+// GetActiveOTP fetches the newest unexpired, unused OTP record for a user
+func (r *authRepository) GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (OTP, error) {
+	query := `
+		SELECT id, user_id, hashed_otp, type, is_used, expires_at, created_at 
+		FROM otps 
+		WHERE user_id = $1 AND type = $2 AND is_used = FALSE AND expires_at > NOW()
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+
+	var o OTP
+
+	err := r.db.QueryRow(ctx, query, userID, otpType).Scan(
+		&o.ID,
+		&o.UserID,
+		&o.HashedOTP,
+		&o.Type,
+		&o.IsUsed,
+		&o.ExpiresAt,
+		&o.CreatedAt,
+	)
+	if err != nil {
+		// If no records found in the db, return invalid or expired otp error
+		return OTP{}, fmt.Errorf("failed to fetch otp : %w", err)
+	}
+
+	return o, nil
+}
+
+// MarkOTPAsUsedAndVerifyUser handles the verfication of user email and mark OTP as used
+func (r *authRepository) MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Mark OTP as used
+	_, err = tx.Exec(ctx, `UPDATE otps SET is_used = TRUE WHERE id = $1`, otpID)
+	if err != nil {
+		return fmt.Errorf("failed to update otp status: %w", err)
+	}
+
+	// Mark user email as verified
+	_, err = tx.Exec(ctx, `UPDATE users SET is_email_verified = TRUE WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("failed to verify user email status: %w", err)
+	}
+
+	// Commit transaction
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
