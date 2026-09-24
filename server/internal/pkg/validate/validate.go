@@ -26,11 +26,11 @@ func IsPhone(phone string) bool {
 //
 // Valid Password must:
 //
-//   - be greater or equal to 8 characters,
+//   - be greater or equal to 8 characters and less or equal to 40 characters,
 //   - contain atleast one number,
 //   - contain atleast one special character (! @ # $ % ^ & * ? )
 func IsValidPassword(password string) bool {
-	if len(password) < 8 {
+	if len(password) < 8 || len(password) > 40 {
 		return false
 	}
 	hasNumber := regexp.MustCompile(`[0-9]`).MatchString(password)
