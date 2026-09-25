@@ -6,11 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/aprimr/tickr/internal/pkg/device"
 	er "github.com/aprimr/tickr/internal/pkg/errors"
 	"github.com/aprimr/tickr/internal/pkg/response"
 )
 
 type AuthHandler interface {
+	HandleLogin(w http.ResponseWriter, r *http.Request)
+
 	HandleUserRegister(w http.ResponseWriter, r *http.Request)
 	HandleVenueAdminRegister(w http.ResponseWriter, r *http.Request)
 
@@ -27,6 +30,50 @@ func NewAuthHandler(service AuthService, logger *slog.Logger) AuthHandler {
 		service: service,
 		log:     logger,
 	}
+}
+
+// HandleLogin handles user authentication for user, venue admin and super admin
+func (h *authHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Warn("failed to decode login request", "error", err)
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	// Get device info from request
+	deviceInfo := device.Parse(r)
+
+	accessToken, refreshToken, err := h.service.Login(r.Context(), req, deviceInfo)
+	if err != nil {
+		if errors.Is(err, ErrInvalidCredentials) {
+			response.Error(w, http.StatusUnauthorized, ErrInvalidCredentials.Error(), nil)
+			return
+		}
+		if errors.Is(err, ErrEmailNotVerified) {
+			response.Error(w, http.StatusForbidden, ErrEmailNotVerified.Error(), nil)
+			return
+		}
+		if errors.Is(err, ErrAccountDeactivated) {
+			response.Error(w, http.StatusForbidden, ErrAccountDeactivated.Error(), nil)
+			return
+		}
+
+		h.log.Error("login failed", "error", err, "email", req.Email)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	res := map[string]any{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}
+	response.JSON(w, http.StatusOK, "login successful", res)
 }
 
 // HandleUserRegister handles user registration

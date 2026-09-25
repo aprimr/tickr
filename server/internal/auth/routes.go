@@ -8,10 +8,10 @@ import (
 )
 
 func RegisterRoutes(r chi.Router, handler AuthHandler) {
-	r.Use(appMiddleware.RateLimit(10, time.Minute))
+	r.With(appMiddleware.RateLimit(10, 5*time.Minute)).Post("/login", handler.HandleLogin)
 
-	r.Post("/users", handler.HandleUserRegister)
-	r.Post("/venues", handler.HandleVenueAdminRegister)
+	r.With(appMiddleware.RateLimit(10, 5*time.Minute)).Post("/users", handler.HandleUserRegister)
+	r.With(appMiddleware.RateLimit(10, 5*time.Minute)).Post("/venues", handler.HandleVenueAdminRegister)
 
-	r.Post("/verify", handler.HandleVerifyAccount)
+	r.With(appMiddleware.RateLimit(10, 5*time.Minute)).Post("/verify", handler.HandleVerifyAccount)
 }

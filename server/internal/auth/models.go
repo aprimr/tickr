@@ -30,7 +30,6 @@ type User struct {
 	Role            UserRole   `db:"role"`
 	IsActive        bool       `db:"is_active"`
 	IsEmailVerified bool       `db:"is_email_verified"`
-	IsPhoneVerified bool       `db:"is_phone_verified"`
 	LastLoginAt     *time.Time `db:"last_login_at"`
 	CreatedAt       time.Time  `db:"created_at"`
 	UpdatedAt       time.Time  `db:"updated_at"`

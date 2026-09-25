@@ -8,11 +8,15 @@ import (
 
 	"github.com/aprimr/tickr/internal/domain"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AuthRepository interface {
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	UpdateLastLoginAndStoreRefreshToken(ctx context.Context, userID uuid.UUID, hashedToken, deviceInfo string) error
+
 	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 
@@ -26,6 +30,84 @@ type authRepository struct {
 
 func NewAuthRepository(db *pgxpool.Pool) AuthRepository {
 	return &authRepository{db: db}
+}
+
+// GetUserByEmail finds the user's record by email and returns the user
+func (r *authRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	query := `
+		SELECT id, email, phone_number, password_hash, role, is_active, is_email_verified, last_login_at, created_at, updated_at
+		FROM users WHERE email = $1
+	`
+
+	var user User
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PhoneNumber,
+		&user.PasswordHash,
+		&user.Role,
+		&user.IsActive,
+		&user.IsEmailVerified,
+		&user.LastLoginAt,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w", ErrUserNotFound)
+		}
+
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &user, nil
+}
+
+// UpdateLastLoginAndStoreRefreshToken updates the last_login_at and
+// creates a new record for access token in `access_tokens` table
+func (r *authRepository) UpdateLastLoginAndStoreRefreshToken(ctx context.Context, userID uuid.UUID, hashedToken, deviceInfo string) error {
+	// Start the transaction
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin db transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Update last login
+	updateQuery := `
+		UPDATE users
+		SET last_login_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := tx.Exec(ctx, updateQuery, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update last login: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("%w", ErrUserNotFound)
+	}
+
+	// Store refresh token
+	query := `
+	INSERT INTO refresh_tokens
+	(user_id, hashed_token, device_info, expires_at)
+	VALUES ($1, $2, $3, $4)
+	`
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour) // refresh token expires after 7 days
+	_, err = tx.Exec(ctx, query, userID, hashedToken, deviceInfo, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	// Commit transaction
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit db transaction: %w", err)
+	}
+
+	return nil
 }
 
 // CreateUser handles user registration transaction for end users

@@ -33,6 +33,18 @@ type VerifyAccountRequest struct {
 	OTP    string    `json:"otp"`
 }
 
+// Validate LoginRequest data
+func (req *LoginRequest) Validate() map[string]string {
+
+	errs := make(map[string]string)
+
+	if !validate.IsEmail(req.Email) {
+		errs["email"] = "invalid email format"
+	}
+
+	return errs
+}
+
 // Validate UserRegisterRequest data
 func (req *UserRegisterRequest) Validate() map[string]string {
 	errs := make(map[string]string)
@@ -64,7 +76,7 @@ func (req *VenueRegisterRequest) Validate() map[string]string {
 		errs["phone_number"] = "invalid phone number format"
 	}
 	if !validate.IsValidPassword(req.Password) {
-		errs["password"] = "password must be at least 8 characters long and contain at least one number and one special character (! @ # $ % ^ & * ? )"
+		errs["password"] = "password must be at least 8 characters long and at most 40 characters long and must contain at least one number and one special character (! @ # $ % ^ & * ? )"
 	}
 	if !validate.IsMinLength(req.VenueName, 5) {
 		errs["venue_name"] = "venue name must be atleast 5 characters long"
