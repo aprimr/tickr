@@ -15,7 +15,6 @@ Base authentication details for all users.
 | `role` | Text | NOT NULL, DEFAULT `'user'` | Access role ("user" ,"venue_admin", "super_admin") |
 | `is_active` | Boolean | DEFAULT `TRUE` | Active status |
 | `is_email_verified` | Boolean | DEFAULT `FALSE` | Email verification status |
-| `is_phone_verified` | Boolean | DEFAULT `FALSE` | Phone verification status |
 | `last_login_at` | TIMESTAMPZ | NULL | Last login time |
 | `created_at` | TIMESTAMPZ | DEFAULT `NOW()` | Creation time |
 | `updated_at` | TIMESTAMPZ | DEFAULT `NOW()` | Update time |
