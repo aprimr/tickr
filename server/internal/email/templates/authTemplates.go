@@ -5,7 +5,12 @@ import "html/template"
 // AccountVerificationTemplate is the raw HTTP string for the account verification OTP email
 const AccountVerificationTemplate = `
 	<body style="margin: 0; padding: 0; background-color: #111111; font-family: Helvetica, Arial, sans-serif; color: #e0e0e0;">
-    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #111111; background-image: linear-gradient(to right, #1a1a1a 1px, transparent 1px), linear-gradient(to bottom, #1a1a1a 1px, transparent 1px); background-size: 32px 32px; padding: 60px 20px;">
+
+    <!-- Hidden Text for Inbox Preview -->
+    <div style="display: none; font-size: 1px; color: #111111; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+        Your Tickr verification code is {{.OTP}}. It expires in 15 minutes.
+    </div>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #111111; background-image: linear-gradient(to right, #053061 1px, transparent 1px), linear-gradient(to bottom, #053061 1px, transparent 1px); background-size: 32px 32px; padding: 60px 20px;">
         <tr>
             <td align="center">
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 520px; background-color: #000000; border-radius: 0px; border: 1px solid #262626;">
@@ -19,12 +24,12 @@ const AccountVerificationTemplate = `
 
                             <!-- Heading -->
                             <h1 style="margin: 0 0 16px 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">
-                                Welcome, {{.Name}}!
+                                Hi, {{.Name}}!
                             </h1>
                             
                             <!-- Body -->
                             <p style="margin: 0 0 28px 0; font-size: 15px; line-height: 1.6; color: #999999;">
-                                Please use the verification code below to verify your account. This code will expire in <strong>15 minutes</strong>.
+                                Please use the verification code below to complete your verification and access your Tickr account. This code will expire in <strong>15 minutes</strong>.
                             </p>
                             
                             <!-- OTP -->
@@ -38,9 +43,13 @@ const AccountVerificationTemplate = `
                             
                             <!-- Footer -->
                             <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #555555;">
-                                If you didn't register for Tickr, you can safely ignore this email.
+                                If you did not request this, please ignore this message.
                             </p>
-                            
+
+                            <!-- Copyright & link Footer -->
+                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #222222; font-size: 11px; color: #444444; text-align: left;">
+                                &copy; 2026 Tickr. All rights reserved.
+                            </div>                  
                         </td>
                     </tr>
                 </table>
