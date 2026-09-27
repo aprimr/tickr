@@ -18,6 +18,7 @@ type AuthHandler interface {
 	HandleVenueAdminRegister(w http.ResponseWriter, r *http.Request)
 
 	HandleVerifyAccount(w http.ResponseWriter, r *http.Request)
+	HandleForgotPassword(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -170,4 +171,26 @@ func (h *authHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	response.JSON(w, http.StatusOK, "verification successful", nil)
+}
+
+// HandleForgotPassword handles the request for forget password
+func (h *authHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req ForgotPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	err := h.service.ForgotPassword(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "password reset code sent to the email", nil)
 }

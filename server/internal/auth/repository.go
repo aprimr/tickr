@@ -20,6 +20,7 @@ type AuthRepository interface {
 	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 
+	StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error
 	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (OTP, error)
 	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
 }
@@ -220,6 +221,23 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	}
 
 	return userID, nil
+}
+
+// StoreOTP handles the creation of new OTP record in the db
+func (r *authRepository) StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error {
+	expiresAt := time.Now().Add(15 * time.Minute)
+	query := `
+		INSERT INTO otps
+		(user_id, hashed_otp, type, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	_, err := r.db.Exec(ctx, query, userID, otpHash, otpType, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to store otp: %w", err)
+	}
+
+	return nil
 }
 
 // GetActiveOTP fetches the newest unexpired, unused OTP record for a user

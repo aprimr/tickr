@@ -21,6 +21,7 @@ type AuthService interface {
 	RegisterVenueAdmin(ctx context.Context, req VenueRegisterRequest) (uuid.UUID, error)
 
 	VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error
+	ForgotPassword(ctx context.Context, req ForgotPasswordRequest) error
 }
 
 type authService struct {
@@ -155,6 +156,7 @@ func (s *authService) RegisterVenueAdmin(ctx context.Context, req VenueRegisterR
 	return userID, nil
 }
 
+// VerifyUserAccount handles the user's email verification
 func (s *authService) VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error {
 	// Fetch the active OTP from database
 	otpRecord, err := s.repo.GetActiveOTP(ctx, req.UserID, domain.OTPTypeAccountVerification)
@@ -175,6 +177,47 @@ func (s *authService) VerifyUserAccount(ctx context.Context, req VerifyAccountRe
 	err = s.repo.MarkOTPAsUsedAndVerifyUser(ctx, otpRecord.ID, req.UserID)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ForgotPassword handles the user's account password reset
+func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) error {
+	// Fetch user from db
+	userDetail, err := s.repo.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		// Return nil if the err is user not found
+		if errors.Is(err, ErrUserNotFound) {
+			return nil
+		}
+
+		// Else return actual error
+		return err
+	}
+
+	// Generate OTP
+	otp, err := otp.GenerateOTP()
+	if err != nil {
+		return fmt.Errorf("failed to generate otp: %w", err)
+	}
+
+	// Hash OTP
+	hashedOTP, err := hash.BcryptString(otp)
+	if err != nil {
+		return fmt.Errorf("failed to hash otp: %w", err)
+	}
+
+	// Store OTP in the database
+	err = s.repo.StoreOTP(ctx, userDetail.ID, hashedOTP, domain.OTPTypeForgotPassword)
+	if err != nil {
+		return err
+	}
+
+	// Send email
+	err = s.mailer.SendAccountVerificationEmail(req.Email, "there", otp)
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	return nil

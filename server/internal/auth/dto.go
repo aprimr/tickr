@@ -33,6 +33,10 @@ type VerifyAccountRequest struct {
 	OTP    string    `json:"otp"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
 // Validate LoginRequest data
 func (req *LoginRequest) Validate() map[string]string {
 
@@ -106,5 +110,18 @@ func (req *VerifyAccountRequest) Validate() map[string]string {
 	} else if len(req.OTP) != 6 {
 		errs["otp"] = "otp must be 6 characters long"
 	}
+	return errs
+}
+
+// Validate ForgotPasswordRequest data
+func (req *ForgotPasswordRequest) Validate() map[string]string {
+	errs := make(map[string]string)
+
+	if req.Email == "" {
+		errs["email"] = "email is required"
+	} else if !validate.IsEmail(req.Email) {
+		errs["email"] = "invalid email format"
+	}
+
 	return errs
 }
