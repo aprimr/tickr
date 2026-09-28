@@ -17,22 +17,28 @@ Following the standard Go project layout, the `server/` directory is structured 
 server/
 ├── cmd/
 │   └── api/
-│       └── main.go            # Application entrypoint
+│       └── main.go                  # Application entrypoint
 ├── internal/
-│   ├── auth/                  # Authentication & RBAC feature module
-│   │   ├── handler.go         # HTTP handlers and route endpoints
-│   │   ├── service.go         # Core business logic
-│   │   ├── repository.go      # Database query execution layer
-│   │   ├── models.go          # Auth domain models and structs
-│   │   ├── errors.go          # Feature-specific error definitions
-│   │   └── dto.go             # Request/Response data transfer objects
-│   ├── database/              # PostgreSQL connection pool initialization
-│   ├── middleware/            # Auth, RBAC, logging, and recovery middleware
-│   ├── models/                # Global domain structs and enum mappings
-├── db/
-│   └── migrations/            # Versioned Goose SQL migration files
-├── docs/                      # Technical specifications and database schema specs
-├── .env  
-├── .gitignore
-├── go.mod
-└── go.sum
+│   ├── auth/                         
+│   │   ├── errors.go                # Feature-specific error definitions
+│   │   ├── handler.go               # HTTP handlers and route endpoints
+│   │   ├── models.go                # Auth domain models and structs
+│   │   ├── repository.go            # Database query execution layer
+│   │   ├── routes.go                # Feature-specific route declarations
+│   │   ├── service.go               # Core business logic
+│   │   └── utils.go                 # Feature-specific helper utilities
+│   ├── db/                          # PostgreSQL connection pool initialization
+│   ├── domain/                      # Global domain structs and enums
+│   ├── email/                       # Email dispatchers and HTML templates
+│   ├── middleware/                  # Middleware for Auth, RBAC, rate-limiting and so on
+│   ├── utils/                       # Global utility modules
+│   └── pkg/                         # Shared internal packages
+├── 
+├── db/                              
+│   └── migrations/                  # SQL migration files
+├── docs/                            # Server Architecture and API documentation
+├── .air.toml                        
+├── .env                             
+├── .gitignore                       
+├── go.mod                           
+└── go.sum                           
