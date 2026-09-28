@@ -13,6 +13,7 @@ type EmailService interface {
 	SendEmail(to string, subject string, body string) error
 
 	SendAccountVerificationEmail(to, name, otp string) error
+	SendForgotPasswordEmail(to, name, otp string) error
 }
 
 type emailService struct {
