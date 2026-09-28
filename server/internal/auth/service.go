@@ -215,7 +215,7 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 	}
 
 	// Send email
-	err = s.mailer.SendAccountVerificationEmail(req.Email, "there", otp)
+	err = s.mailer.SendForgotPasswordEmail(req.Email, "there", otp)
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
