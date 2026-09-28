@@ -37,6 +37,12 @@ type ForgotPasswordRequest struct {
 	Email string `json:"email"`
 }
 
+type ResetPasswordRequest struct {
+	Email       string `json:"email"`
+	OTP         string `json:"otp"`
+	NewPassword string `json:"new_password"`
+}
+
 // Validate LoginRequest data
 func (req *LoginRequest) Validate() map[string]string {
 
@@ -121,6 +127,31 @@ func (req *ForgotPasswordRequest) Validate() map[string]string {
 		errs["email"] = "email is required"
 	} else if !validate.IsEmail(req.Email) {
 		errs["email"] = "invalid email format"
+	}
+
+	return errs
+}
+
+// Validate ResetPasswordRequest data
+func (req *ResetPasswordRequest) Validate() map[string]string {
+	errs := make(map[string]string)
+
+	if req.Email == "" {
+		errs["email"] = "email is required"
+	} else if !validate.IsEmail(req.Email) {
+		errs["email"] = "invalid email format"
+	}
+
+	if req.OTP == "" {
+		errs["otp"] = "otp is required"
+	} else if len(req.OTP) != 6 {
+		errs["otp"] = "otp must be 6 digits long"
+	}
+
+	if req.NewPassword == "" {
+		errs["new_password"] = "new password is required"
+	} else if !validate.IsValidPassword(req.NewPassword) {
+		errs["new_password"] = "password must be at least 8 characters long and contain at least one number and one special character (! @ # $ % ^ & * ? )"
 	}
 
 	return errs

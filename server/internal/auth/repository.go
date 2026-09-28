@@ -21,8 +21,9 @@ type AuthRepository interface {
 	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
 
 	StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error
-	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (OTP, error)
+	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*OTP, error)
 	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
+	UpdatePasswordAndVerifyEmail(ctx context.Context, userID uuid.UUID, hashedPassword string) error
 }
 
 type authRepository struct {
@@ -241,7 +242,7 @@ func (r *authRepository) StoreOTP(ctx context.Context, userID uuid.UUID, otpHash
 }
 
 // GetActiveOTP fetches the newest unexpired, unused OTP record for a user
-func (r *authRepository) GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (OTP, error) {
+func (r *authRepository) GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*OTP, error) {
 	query := `
 		SELECT id, user_id, hashed_otp, type, is_used, expires_at, created_at 
 		FROM otps 
@@ -263,10 +264,10 @@ func (r *authRepository) GetActiveOTP(ctx context.Context, userID uuid.UUID, otp
 	)
 	if err != nil {
 		// If no records found in the db, return invalid or expired otp error
-		return OTP{}, fmt.Errorf("failed to fetch otp : %w", err)
+		return nil, fmt.Errorf("failed to fetch otp : %w", err)
 	}
 
-	return o, nil
+	return &o, nil
 }
 
 // MarkOTPAsUsedAndVerifyUser handles the verfication of user email and mark OTP as used
@@ -293,6 +294,24 @@ func (r *authRepository) MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID u
 	err = tx.Commit(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePasswordAndVerifyEmail updates the user's password and verify user email
+func (r *authRepository) UpdatePasswordAndVerifyEmail(ctx context.Context, userID uuid.UUID, hashedPassword string) error {
+	query := `
+		UPDATE users
+		SET password_hash = $1, is_email_verified = TRUE, updated_at = NOW()
+		WHERE id = $2
+	`
+	result, err := r.db.Exec(ctx, query, hashedPassword, userID)
+	if err != nil {
+		return fmt.Errorf("failed to create new password: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("%w", ErrUserNotFound)
 	}
 
 	return nil

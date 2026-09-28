@@ -9,8 +9,9 @@ var (
 	ErrUserNotFound        = errors.New("user not found")
 	ErrInvalidOrExpiredOTP = errors.New("invalid or expired verification code")
 
-	ErrEmailAlreadyExists = errors.New("email already exists")
-	ErrInvalidCredentials = errors.New("invalid email or password")
+	ErrEmailAlreadyExists     = errors.New("email already exists")
+	ErrInvalidCredentials     = errors.New("invalid email or password")
+	ErrActiveOTPAlreadyExists = errors.New("an active otp already exists, please try again later")
 
 	ErrFailedToCreateToken = errors.New("failed to create jwt token")
 )

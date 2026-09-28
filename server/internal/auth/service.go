@@ -22,6 +22,7 @@ type AuthService interface {
 
 	VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error
 	ForgotPassword(ctx context.Context, req ForgotPasswordRequest) error
+	ResetPassword(ctx context.Context, req ResetPasswordRequest) error
 }
 
 type authService struct {
@@ -182,7 +183,7 @@ func (s *authService) VerifyUserAccount(ctx context.Context, req VerifyAccountRe
 	return nil
 }
 
-// ForgotPassword handles the user's account password reset
+// ForgotPassword handles the user's account password reset request
 func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) error {
 	// Fetch user from db
 	userDetail, err := s.repo.GetUserByEmail(ctx, req.Email)
@@ -194,6 +195,12 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 
 		// Else return actual error
 		return err
+	}
+
+	// If any active otp, return error, ignore the returned error
+	otpRecord, _ := s.repo.GetActiveOTP(ctx, userDetail.ID, domain.OTPTypeForgotPassword)
+	if otpRecord != nil {
+		return fmt.Errorf("%w", ErrActiveOTPAlreadyExists)
 	}
 
 	// Generate OTP
@@ -218,6 +225,47 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 	err = s.mailer.SendForgotPasswordEmail(req.Email, "there", otp)
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return nil
+}
+
+// ResetPassword updates the user's password and mark user verified
+func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordRequest) error {
+	// Fetch user from db
+	userDetail, err := s.repo.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		// Return nil if the err is user not found
+		if errors.Is(err, ErrUserNotFound) {
+			return nil
+		}
+
+		// Else return actual error
+		return err
+	}
+
+	// Fetch active `forgot_password` OTP
+	otp, err := s.repo.GetActiveOTP(ctx, userDetail.ID, domain.OTPTypeForgotPassword)
+	if err != nil {
+		return err
+	}
+
+	// Compare OTP
+	match := hash.CheckBcryptString(req.OTP, otp.HashedOTP)
+	if !match {
+		return fmt.Errorf("%w", ErrInvalidOrExpiredOTP)
+	}
+
+	// Hash new password
+	hashedPassword, err := HashPassword(req.NewPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Set new password
+	err = s.repo.UpdatePasswordAndVerifyEmail(ctx, userDetail.ID, hashedPassword)
+	if err != nil {
+		return err
 	}
 
 	return nil

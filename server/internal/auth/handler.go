@@ -19,6 +19,7 @@ type AuthHandler interface {
 
 	HandleVerifyAccount(w http.ResponseWriter, r *http.Request)
 	HandleForgotPassword(w http.ResponseWriter, r *http.Request)
+	HandleResetPassword(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -188,9 +189,43 @@ func (h *authHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Reques
 
 	err := h.service.ForgotPassword(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, ErrActiveOTPAlreadyExists) {
+			response.Error(w, http.StatusTooManyRequests, ErrActiveOTPAlreadyExists.Error(), nil)
+			return
+		}
+
+		h.log.Error("failed to process forget password request", "error", err, "email", req.Email)
 		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
 		return
 	}
 
 	response.JSON(w, http.StatusOK, "password reset code sent to the email", nil)
+}
+
+// HandleResetPassword handles the password resetting request
+func (h *authHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	err := h.service.ResetPassword(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, ErrInvalidOrExpiredOTP) {
+			response.Error(w, http.StatusBadRequest, ErrInvalidOrExpiredOTP.Error(), nil)
+			return
+		}
+
+		h.log.Error("failed to reset user password", "error", err, "email", req.Email)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "password reset successful", nil)
 }
