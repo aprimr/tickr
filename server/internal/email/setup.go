@@ -14,6 +14,7 @@ type EmailService interface {
 
 	SendAccountVerificationEmail(to, name, otp string) error
 	SendForgotPasswordEmail(to, name, otp string) error
+	SendPasswordResetSuccessEmail(to, name string) error
 }
 
 type emailService struct {

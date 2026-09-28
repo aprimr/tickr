@@ -44,3 +44,21 @@ func (s *emailService) SendForgotPasswordEmail(to, name, otp string) error {
 
 	return s.SendEmail(to, emailSubject, emailBody)
 }
+
+// SendPasswordResetSuccessEmail builds the email body and sends it
+func (s *emailService) SendPasswordResetSuccessEmail(to, name string) error {
+	data := PasswordResetSuccessData{
+		Name: name,
+	}
+
+	var buf bytes.Buffer
+	if err := templates.PasswordResetSuccess.Execute(&buf, data); err != nil {
+		s.logger.Error("failed to send password reset success email", "error", err)
+		return fmt.Errorf("failed to build email body: %w", err)
+	}
+
+	emailSubject := "Password Reset Successful"
+	emailBody := buf.String()
+
+	return s.SendEmail(to, emailSubject, emailBody)
+}
