@@ -235,9 +235,9 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 	// Fetch user from db
 	userDetail, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
-		// Return nil if the err is user not found
+		// If user is not found, return `invalid or expired otp`
 		if errors.Is(err, ErrUserNotFound) {
-			return nil
+			return fmt.Errorf("%w", ErrInvalidOrExpiredOTP)
 		}
 
 		// Else return actual error
@@ -263,9 +263,15 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 	}
 
 	// Set new password
-	err = s.repo.UpdatePasswordAndVerifyEmail(ctx, userDetail.ID, hashedPassword)
+	err = s.repo.UpdatePasswordAndMarkOTPAsUsed(ctx, userDetail.ID, otp.ID, hashedPassword)
 	if err != nil {
 		return err
+	}
+
+	// Send password changed email
+	err = s.mailer.SendPasswordResetSuccessEmail(userDetail.Email, "there")
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	return nil

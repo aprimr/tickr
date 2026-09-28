@@ -23,7 +23,7 @@ type AuthRepository interface {
 	StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error
 	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*OTP, error)
 	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
-	UpdatePasswordAndVerifyEmail(ctx context.Context, userID uuid.UUID, hashedPassword string) error
+	UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error
 }
 
 type authRepository struct {
@@ -299,19 +299,43 @@ func (r *authRepository) MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID u
 	return nil
 }
 
-// UpdatePasswordAndVerifyEmail updates the user's password and verify user email
-func (r *authRepository) UpdatePasswordAndVerifyEmail(ctx context.Context, userID uuid.UUID, hashedPassword string) error {
-	query := `
+// UpdatePasswordAndMarkOTPAsUsed updates the user's password, marks them verified, and invalidates the OTP atomically
+func (r *authRepository) UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error {
+	// 1. Begin a database transaction
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Update user's password
+	userQuery := `
 		UPDATE users
 		SET password_hash = $1, is_email_verified = TRUE, updated_at = NOW()
 		WHERE id = $2
 	`
-	result, err := r.db.Exec(ctx, query, hashedPassword, userID)
+	result, err := tx.Exec(ctx, userQuery, hashedPassword, userID)
 	if err != nil {
-		return fmt.Errorf("failed to create new password: %w", err)
+		return fmt.Errorf("failed to update password: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("%w", ErrUserNotFound)
+	}
+
+	// Update OTP status as used
+	otpQuery := `
+		UPDATE otps
+		SET is_used = TRUE
+		WHERE id = $1
+	`
+	_, err = tx.Exec(ctx, otpQuery, otpID)
+	if err != nil {
+		return fmt.Errorf("failed to update otp status: %w", err)
+	}
+
+	// Commit  transaction
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
