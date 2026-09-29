@@ -18,5 +18,6 @@ func RegisterRoutes(r chi.Router, handler AuthHandler) {
 		r.With(appMiddleware.RateLimit(5, 15*time.Minute)).Post("/forgot-password", handler.HandleForgotPassword)
 		r.With(appMiddleware.RateLimit(5, 15*time.Minute)).Post("/reset-password", handler.HandleResetPassword)
 
+		r.With(appMiddleware.RateLimit(2, time.Minute)).Post("/rotate", handler.HandleTokenRotation)
 	})
 }

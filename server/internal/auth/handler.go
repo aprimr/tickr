@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/aprimr/tickr/internal/domain"
 	"github.com/aprimr/tickr/internal/pkg/device"
 	er "github.com/aprimr/tickr/internal/pkg/errors"
 	"github.com/aprimr/tickr/internal/pkg/response"
+	"github.com/aprimr/tickr/internal/utils/jwt"
 )
 
 type AuthHandler interface {
@@ -20,6 +22,8 @@ type AuthHandler interface {
 	HandleVerifyAccount(w http.ResponseWriter, r *http.Request)
 	HandleForgotPassword(w http.ResponseWriter, r *http.Request)
 	HandleResetPassword(w http.ResponseWriter, r *http.Request)
+
+	HandleTokenRotation(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -228,4 +232,48 @@ func (h *authHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 	}
 
 	response.JSON(w, http.StatusOK, "password reset successful", nil)
+}
+
+// HandleTokenRotation handles the rotation of the tokens
+func (h *authHandler) HandleTokenRotation(w http.ResponseWriter, r *http.Request) {
+	var req RotateTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	// Get device info
+	deviceInfo := device.Parse(r)
+
+	accessToken, refreshToken, err := h.service.RotateToken(r.Context(), req, deviceInfo)
+	if err != nil {
+		switch {
+		case errors.Is(err, jwt.ErrExpiredToken):
+			response.Error(w, http.StatusUnauthorized, jwt.ErrExpiredToken.Error(), nil)
+
+		case errors.Is(err, jwt.ErrInvalidToken):
+			response.Error(w, http.StatusUnauthorized, jwt.ErrInvalidToken.Error(), nil)
+
+		case errors.Is(err, domain.ErrRefreshTokenNotFound):
+			response.Error(w, http.StatusUnauthorized, domain.ErrRefreshTokenNotFound.Error(), nil)
+
+		default:
+			response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		}
+
+		h.log.Error("failed to rotate refresh token", "error", err)
+		return
+	}
+
+	res := map[string]string{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}
+
+	response.JSON(w, http.StatusOK, "token rotation successful", res)
 }

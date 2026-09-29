@@ -24,6 +24,9 @@ type AuthRepository interface {
 	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*OTP, error)
 	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
 	UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error
+
+	GetRefreshTokenByItsHash(ctx context.Context, hashedToken string) (*domain.RefreshToken, error)
+	DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, userID uuid.UUID, newRefreshHash, deviceInfo string) error
 }
 
 type authRepository struct {
@@ -336,6 +339,78 @@ func (r *authRepository) UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, use
 	// Commit  transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetRefreshTokenByItsHash returns the record matching the hashedToken
+func (r *authRepository) GetRefreshTokenByItsHash(ctx context.Context, hashedToken string) (*domain.RefreshToken, error) {
+	const query = `
+		SELECT
+		id, user_id, hashed_token, device_info, expires_at, created_at
+		FROM refresh_tokens
+		WHERE hashed_token = $1
+	`
+
+	var token domain.RefreshToken
+	err := r.db.QueryRow(ctx, query, hashedToken).Scan(
+		&token.ID,
+		&token.UserID,
+		&token.HashedToken,
+		&token.DeviceInfo,
+		&token.ExpiresAt,
+		&token.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrRefreshTokenNotFound
+		}
+
+		return nil, fmt.Errorf("failed to get refresh token: %w", err)
+	}
+
+	return &token, nil
+}
+
+// DeleteOldAndCreateNewRefreshToken deletes the old token and inserts a new hashed token
+func (r *authRepository) DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, UserID uuid.UUID, newRefreshHash, deviceInfo string) error {
+	// Begin transaction
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete old refresh token
+	const deleteQuery = `
+		DELETE FROM refresh_tokens
+		WHERE id = $1
+	`
+	result, err := tx.Exec(ctx, deleteQuery, oldTokenID)
+	if err != nil {
+		return fmt.Errorf("failed to delete old refresh token: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrRefreshTokenNotFound
+	}
+
+	// Insert new refresh token
+	const insertQuery = `
+		INSERT INTO refresh_tokens 
+		(user_id, hashed_token, device_info, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+	expiresAt := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	_, err = tx.Exec(ctx, insertQuery, UserID, newRefreshHash, deviceInfo, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to create new refresh token: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit refresh token rotation: %w", err)
 	}
 
 	return nil

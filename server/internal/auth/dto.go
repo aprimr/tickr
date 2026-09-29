@@ -43,6 +43,10 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type RotateTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // Validate LoginRequest data
 func (req *LoginRequest) Validate() map[string]string {
 
@@ -152,6 +156,17 @@ func (req *ResetPasswordRequest) Validate() map[string]string {
 		errs["new_password"] = "new password is required"
 	} else if !validate.IsValidPassword(req.NewPassword) {
 		errs["new_password"] = "password must be at least 8 characters long and contain at least one number and one special character (! @ # $ % ^ & * ? )"
+	}
+
+	return errs
+}
+
+// Validate ResetPasswordRequest data
+func (req *RotateTokenRequest) Validate() map[string]string {
+	errs := make(map[string]string)
+
+	if req.RefreshToken == "" {
+		errs["refresh_token"] = "refresh token is required"
 	}
 
 	return errs

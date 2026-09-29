@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aprimr/tickr/internal/domain"
 	"github.com/aprimr/tickr/internal/email"
@@ -23,6 +24,8 @@ type AuthService interface {
 	VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error
 	ForgotPassword(ctx context.Context, req ForgotPasswordRequest) error
 	ResetPassword(ctx context.Context, req ResetPasswordRequest) error
+
+	RotateToken(ctx context.Context, req RotateTokenRequest, deviceInfo string) (string, string, error)
 }
 
 type authService struct {
@@ -275,4 +278,69 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 	}
 
 	return nil
+}
+
+// RotateToken verifies the refresh token, replaces it in the database,
+// returns access token, refresh token and error
+func (s *authService) RotateToken(ctx context.Context, req RotateTokenRequest, deviceInfo string) (string, string, error) {
+	// Verify jwt signature
+	claims, err := jwt.VerifyRefreshToken(req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, jwt.ErrExpiredToken) {
+			return "", "", jwt.ErrExpiredToken
+		}
+
+		return "", "", jwt.ErrInvalidToken
+	}
+
+	// Hash incomming refresh token
+	hashedClientToken, err := hash.String(req.RefreshToken)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash refresh token: %w", err)
+	}
+
+	// Get refresh token from db
+	refreshToken, err := s.repo.GetRefreshTokenByItsHash(ctx, hashedClientToken)
+	if err != nil {
+		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
+			return "", "", domain.ErrRefreshTokenNotFound
+		}
+
+		return "", "", fmt.Errorf("failed to get refresh token: %w", err)
+
+	}
+
+	// Verify if both tokens belong to same user
+	if claims.UserID != refreshToken.UserID {
+		return "", "", jwt.ErrInvalidToken
+	}
+
+	// Verify token expiration
+	if time.Now().After(refreshToken.ExpiresAt) {
+		return "", "", jwt.ErrExpiredToken
+	}
+
+	// Generate new access and refresh token
+	newAccessToken, err := jwt.GenerateAccessToken(claims.UserID, claims.UserRole)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+	newRefreshToken, err := jwt.GenerateRefreshToken(claims.UserID, claims.UserRole)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	// Hash new refresh token
+	newRefreshHashed, err := hash.String(newRefreshToken)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash refresh token: %w", err)
+	}
+
+	// Replace refresh token
+	err = s.repo.DeleteOldAndCreateNewRefreshToken(ctx, refreshToken.ID, claims.UserID, newRefreshHashed, deviceInfo)
+	if err != nil {
+		return "", "", err
+	}
+
+	return newAccessToken, newRefreshToken, nil
 }
