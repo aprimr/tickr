@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/aprimr/tickr/internal/domain"
+	"github.com/aprimr/tickr/internal/middleware"
 	"github.com/aprimr/tickr/internal/pkg/device"
 	er "github.com/aprimr/tickr/internal/pkg/errors"
 	"github.com/aprimr/tickr/internal/pkg/response"
@@ -26,6 +27,7 @@ type AuthHandler interface {
 	HandleTokenRotation(w http.ResponseWriter, r *http.Request)
 
 	HandleLogout(w http.ResponseWriter, r *http.Request)
+	HandleLogoutAllDevices(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -284,7 +286,6 @@ func (h *authHandler) HandleTokenRotation(w http.ResponseWriter, r *http.Request
 func (h *authHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Warn("failed to decode logout request", "error", err)
 		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
 		return
 	}
@@ -298,6 +299,24 @@ func (h *authHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log.Error("logout failed", "error", err)
 		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "logout successful", nil)
+}
+
+// HandleLogoutAllDevices handles revoking all sessions for the current user
+func (h *authHandler) HandleLogoutAllDevices(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	err := h.service.LogoutAllDevices(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		h.log.Error("logout all device failed", "error", err, "user_id", userID)
 		return
 	}
 

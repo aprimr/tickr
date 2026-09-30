@@ -27,6 +27,7 @@ func RegisterRoutes(r chi.Router, handler AuthHandler) {
 			r.Use(appMiddleware.Authenticate()) // Allow logined users with any role
 
 			r.With(appMiddleware.RateLimit(10, time.Minute)).Post("/logout", handler.HandleLogout)
+			r.With(appMiddleware.RateLimit(10, time.Minute)).Post("/logout-all", handler.HandleLogoutAllDevices)
 		})
 	})
 }

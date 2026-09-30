@@ -29,6 +29,7 @@ type AuthRepository interface {
 	DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, userID uuid.UUID, newRefreshHash, deviceInfo string) error
 
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error
 }
 
 type authRepository struct {
@@ -435,6 +436,21 @@ func (r *authRepository) RevokeRefreshToken(ctx context.Context, tokenHash strin
 	_, err := r.db.Exec(ctx, query, tokenHash)
 	if err != nil {
 		return fmt.Errorf("failed to revoke refresh token: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteAllUserSessions removes all refresh tokens of a user
+func (r *authRepository) DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	query := `
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+    `
+
+	_, err := r.db.Exec(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete all user sessions: %w", err)
 	}
 
 	return nil

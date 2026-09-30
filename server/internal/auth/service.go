@@ -28,6 +28,7 @@ type AuthService interface {
 	RotateToken(ctx context.Context, req RotateTokenRequest, deviceInfo string) (string, string, error)
 
 	Logout(ctx context.Context, refreshToken string) error
+	LogoutAllDevices(ctx context.Context, userID uuid.UUID) error
 }
 
 type authService struct {
@@ -358,5 +359,14 @@ func (s *authService) Logout(ctx context.Context, refreshToken string) error {
 		return err
 	}
 
+	return nil
+}
+
+// LogoutAllDevices revokes all active sessions for a user.
+func (s *authService) LogoutAllDevices(ctx context.Context, userID uuid.UUID) error {
+	err := s.repo.DeleteAllUserSessions(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to logout from all devices: %w", err)
+	}
 	return nil
 }
