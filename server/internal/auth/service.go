@@ -235,7 +235,7 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 	return nil
 }
 
-// ResetPassword updates the user's password and mark user verified
+// ResetPassword updates the user's password, mark user verified and also revokes all the sessions
 func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordRequest) error {
 	// Fetch user from db
 	userDetail, err := s.repo.GetUserByEmail(ctx, req.Email)
@@ -268,7 +268,7 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 	}
 
 	// Set new password
-	err = s.repo.UpdatePasswordAndMarkOTPAsUsed(ctx, userDetail.ID, otp.ID, hashedPassword)
+	err = s.repo.ResetPasswordRevokeSessionsAndUseOTP(ctx, userDetail.ID, otp.ID, hashedPassword)
 	if err != nil {
 		return err
 	}

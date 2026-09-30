@@ -23,7 +23,7 @@ type AuthRepository interface {
 	StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error
 	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*domain.OTP, error)
 	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
-	UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error
+	ResetPasswordRevokeSessionsAndUseOTP(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error
 
 	GetRefreshTokenByItsHash(ctx context.Context, hashedToken string) (*domain.RefreshToken, error)
 	DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, userID uuid.UUID, newRefreshHash, deviceInfo string) error
@@ -304,8 +304,8 @@ func (r *authRepository) MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID u
 	return nil
 }
 
-// UpdatePasswordAndMarkOTPAsUsed updates the user's password, marks them verified, and invalidates the OTP atomically
-func (r *authRepository) UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error {
+// ResetPasswordRevokeSessionsAndUseOTP updates the user's password, marks them verified, revokes all the sessions and invalidates the OTP atomically
+func (r *authRepository) ResetPasswordRevokeSessionsAndUseOTP(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error {
 	// 1. Begin a database transaction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -325,6 +325,16 @@ func (r *authRepository) UpdatePasswordAndMarkOTPAsUsed(ctx context.Context, use
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("%w", ErrUserNotFound)
+	}
+
+	// Clear session for the user
+	sessionQuery := `
+		DELETE FROM refresh_tokens
+		WHERE user_id = $1
+	`
+	_, err = tx.Exec(ctx, sessionQuery, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke user session: %w", err)
 	}
 
 	// Update OTP status as used
