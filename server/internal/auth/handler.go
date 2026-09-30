@@ -79,9 +79,9 @@ func (h *authHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := map[string]any{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
+	res := AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}
 	response.JSON(w, http.StatusOK, "login successful", res)
 }
@@ -112,8 +112,8 @@ func (h *authHandler) HandleUserRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	res := map[string]any{
-		"user_id": userID,
+	res := RegisterResponse{
+		UserID: userID,
 	}
 	response.JSON(w, http.StatusCreated, "registration successful", res)
 }
@@ -144,8 +144,8 @@ func (h *authHandler) HandleVenueAdminRegister(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	res := map[string]any{
-		"user_id": userID,
+	res := RegisterResponse{
+		UserID: userID,
 	}
 	response.JSON(w, http.StatusCreated, "registration successful", res)
 }
@@ -274,11 +274,10 @@ func (h *authHandler) HandleTokenRotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	res := map[string]string{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
+	res := AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}
-
 	response.JSON(w, http.StatusOK, "token rotation successful", res)
 }
 

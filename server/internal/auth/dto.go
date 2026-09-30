@@ -5,6 +5,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// =============
+// Request DTOs
+// =============
+
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -184,4 +188,16 @@ func (req LogoutRequest) Validate() map[string]string {
 		errs["refresh_token"] = "refresh token is required"
 	}
 	return errs
+}
+
+// ==============
+// Response DTOs
+// ==============
+type AuthResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RegisterResponse struct {
+	UserID uuid.UUID `json:"user_id"`
 }
