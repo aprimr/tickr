@@ -133,7 +133,7 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
-	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, RoleUser).Scan(&userID)
+	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, domain.RoleUser).Scan(&userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 
@@ -189,7 +189,7 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
-	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, RoleVenueAdmin).Scan(&userID)
+	err = tx.QueryRow(ctx, userQuery, req.Email, req.PhoneNumber, password_hash, domain.RoleVenueAdmin).Scan(&userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 
@@ -420,7 +420,7 @@ func (r *authRepository) DeleteOldAndCreateNewRefreshToken(ctx context.Context, 
 
 // RevokeRefreshToken deletes the refresh token record from the database
 func (r *authRepository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
-	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
+	query := `DELETE FROM refresh_tokens WHERE hashed_token = $1`
 
 	_, err := r.db.Exec(ctx, query, tokenHash)
 	if err != nil {

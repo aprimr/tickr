@@ -24,6 +24,8 @@ type AuthHandler interface {
 	HandleResetPassword(w http.ResponseWriter, r *http.Request)
 
 	HandleTokenRotation(w http.ResponseWriter, r *http.Request)
+
+	HandleLogout(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {

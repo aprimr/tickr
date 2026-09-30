@@ -48,7 +48,7 @@ type RotateTokenRequest struct {
 }
 
 type LogoutRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 // Validate LoginRequest data
