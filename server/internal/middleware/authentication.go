@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/aprimr/tickr/internal/domain"
 	"github.com/aprimr/tickr/internal/pkg/response"
 	"github.com/aprimr/tickr/internal/utils/jwt"
 	"github.com/google/uuid"
@@ -17,7 +18,7 @@ const (
 	ContextKeyRole   contextKey = "role"
 )
 
-func Authenticate(allowedRole string) func(next http.Handler) http.Handler {
+func Authenticate(allowedRoles ...domain.UserRole) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get Authorization header
@@ -27,8 +28,7 @@ func Authenticate(allowedRole string) func(next http.Handler) http.Handler {
 				return
 			}
 
-			// Check Authorization header format
-			parts := strings.Split(authHeader, "")
+			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
 				response.Error(w, http.StatusUnauthorized, "invalid authorization header format", nil)
 				return
@@ -43,10 +43,21 @@ func Authenticate(allowedRole string) func(next http.Handler) http.Handler {
 				return
 			}
 
-			// Check role
-			if claims.UserRole != allowedRole {
-				response.Error(w, http.StatusForbidden, "insufficient permissions", nil)
-				return
+			// Check role (if any roles are specified)
+			// If no roles, any authenticated user is allowed
+			if len(allowedRoles) > 0 {
+				roleAllowed := false
+				for _, role := range allowedRoles {
+					if claims.UserRole == string(role) {
+						roleAllowed = true
+						break
+					}
+				}
+
+				if !roleAllowed {
+					response.Error(w, http.StatusForbidden, "insufficient permissions", nil)
+					return
+				}
 			}
 
 			// Add values to context
