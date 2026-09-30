@@ -26,6 +26,8 @@ type AuthService interface {
 	ResetPassword(ctx context.Context, req ResetPasswordRequest) error
 
 	RotateToken(ctx context.Context, req RotateTokenRequest, deviceInfo string) (string, string, error)
+
+	Logout(ctx context.Context, refreshToken string) error
 }
 
 type authService struct {
@@ -343,4 +345,18 @@ func (s *authService) RotateToken(ctx context.Context, req RotateTokenRequest, d
 	}
 
 	return newAccessToken, newRefreshToken, nil
+}
+
+// Logout deletes the active refresh token session
+func (s *authService) Logout(ctx context.Context, refreshToken string) error {
+	tokenHash, err := hash.String(refreshToken)
+	if err != nil {
+		return fmt.Errorf("failed to hash refresh token: %w", err)
+	}
+
+	if err := s.repo.RevokeRefreshToken(ctx, tokenHash); err != nil {
+		return err
+	}
+
+	return nil
 }

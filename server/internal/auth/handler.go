@@ -277,3 +277,27 @@ func (h *authHandler) HandleTokenRotation(w http.ResponseWriter, r *http.Request
 
 	response.JSON(w, http.StatusOK, "token rotation successful", res)
 }
+
+// HandleLogout logs out user by revoking the refresh token session
+func (h *authHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	var req LogoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Warn("failed to decode logout request", "error", err)
+		response.Error(w, http.StatusBadRequest, er.ErrInvalidReqBody.Error(), nil)
+		return
+	}
+
+	if validationErr := req.Validate(); len(validationErr) > 0 {
+		response.Error(w, http.StatusBadRequest, "validation failed", validationErr)
+		return
+	}
+
+	err := h.service.Logout(r.Context(), req.RefreshToken)
+	if err != nil {
+		h.log.Error("logout failed", "error", err)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "logout successful", nil)
+}

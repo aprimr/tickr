@@ -47,6 +47,10 @@ type RotateTokenRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
 // Validate LoginRequest data
 func (req *LoginRequest) Validate() map[string]string {
 
@@ -169,5 +173,15 @@ func (req *RotateTokenRequest) Validate() map[string]string {
 		errs["refresh_token"] = "refresh token is required"
 	}
 
+	return errs
+}
+
+// Validate LogoutRequest data
+func (req LogoutRequest) Validate() map[string]string {
+	errs := make(map[string]string)
+
+	if req.RefreshToken == "" {
+		errs["refresh_token"] = "refresh token is required"
+	}
 	return errs
 }

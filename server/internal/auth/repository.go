@@ -27,6 +27,8 @@ type AuthRepository interface {
 
 	GetRefreshTokenByItsHash(ctx context.Context, hashedToken string) (*domain.RefreshToken, error)
 	DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, userID uuid.UUID, newRefreshHash, deviceInfo string) error
+
+	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 }
 
 type authRepository struct {
@@ -411,6 +413,18 @@ func (r *authRepository) DeleteOldAndCreateNewRefreshToken(ctx context.Context, 
 	// Commit transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit refresh token rotation: %w", err)
+	}
+
+	return nil
+}
+
+// RevokeRefreshToken deletes the refresh token record from the database
+func (r *authRepository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
+	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
+
+	_, err := r.db.Exec(ctx, query, tokenHash)
+	if err != nil {
+		return fmt.Errorf("failed to revoke refresh token: %w", err)
 	}
 
 	return nil
