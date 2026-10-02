@@ -28,6 +28,8 @@ func RegisterRoutes(r chi.Router, handler AuthHandler) {
 
 			r.With(appMiddleware.RateLimit(10, time.Minute)).Post("/logout", handler.HandleLogout)
 			r.With(appMiddleware.RateLimit(10, time.Minute)).Post("/logout-all", handler.HandleLogoutAllDevices)
+
+			r.With(appMiddleware.RateLimit(3, time.Minute)).Get("/sessions", handler.HandleGetActiveSessions)
 		})
 	})
 }

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"time"
+
 	"github.com/aprimr/tickr/internal/pkg/validate"
 	"github.com/google/uuid"
 )
@@ -50,7 +52,6 @@ type ResetPasswordRequest struct {
 type RotateTokenRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
-
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
@@ -200,4 +201,11 @@ type AuthResponse struct {
 
 type RegisterResponse struct {
 	UserID uuid.UUID `json:"user_id"`
+}
+
+type SessionResponse struct {
+	SessionID  string    `json:"session_id"`
+	DeviceInfo string    `json:"device_info"`
+	IsCurrent  bool      `json:"is_current"`
+	CreatedAt  time.Time `json:"created_at"`
 }

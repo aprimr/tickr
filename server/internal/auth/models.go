@@ -51,3 +51,12 @@ type AdminDetails struct {
 	AdminCreatedAt time.Time `db:"admin_created_at"`
 	AdminUpdatedAt time.Time `db:"admin_updated_at"`
 }
+
+type Session struct {
+	ID          uuid.UUID `db:"id"`
+	UserID      uuid.UUID `db:"user_id"`
+	HashedToken string    `db:"hashed_token"`
+	DeviceInfo  string    `db:"device_info"`
+	ExpiresAt   time.Time `db:"expires_at"`
+	CreatedAt   time.Time `db:"created_at"`
+}

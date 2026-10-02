@@ -30,6 +30,7 @@ type AuthRepository interface {
 
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error
+	GetActiveSessions(ctx context.Context, userID uuid.UUID) (*[]Session, error)
 }
 
 type authRepository struct {
@@ -454,4 +455,34 @@ func (r *authRepository) DeleteAllUserSessions(ctx context.Context, userID uuid.
 	}
 
 	return nil
+}
+
+// GetActiveSessions returns the list of active sessions for the user
+func (r *authRepository) GetActiveSessions(ctx context.Context, userID uuid.UUID) (*[]Session, error) {
+	query := `
+		SELECT id, user_id, hashed_token, device_info, expires_at, created_at
+		FROM refresh_tokens
+		WHERE user_id = $1 
+		AND expires_at > NOW()
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query active sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var s Session
+		err := rows.Scan(&s.ID, &s.UserID, &s.HashedToken, &s.DeviceInfo, &s.ExpiresAt, &s.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session row: %w", err)
+		}
+
+		sessions = append(sessions, s)
+	}
+
+	return &sessions, nil
 }

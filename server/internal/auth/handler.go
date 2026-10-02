@@ -28,6 +28,7 @@ type AuthHandler interface {
 
 	HandleLogout(w http.ResponseWriter, r *http.Request)
 	HandleLogoutAllDevices(w http.ResponseWriter, r *http.Request)
+	HandleGetActiveSessions(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -320,4 +321,29 @@ func (h *authHandler) HandleLogoutAllDevices(w http.ResponseWriter, r *http.Requ
 	}
 
 	response.JSON(w, http.StatusOK, "logout successful", nil)
+}
+
+// HandleGetActiveSessions returns all active sessions for the logged-in user
+func (h *authHandler) HandleGetActiveSessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	// Get access token from header `x-refresh-token`
+	refreshToken := r.Header.Get("x-refresh-token")
+	if refreshToken == "" {
+		response.Error(w, http.StatusUnauthorized, "missing refresh token header", nil)
+		return
+	}
+
+	sessions, err := h.service.GetActiveSessions(r.Context(), userID, refreshToken)
+	if err != nil {
+		h.log.Error("get active sessions failed", "error", err, "user_id", userID)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "sessions fetched successfully", sessions)
 }

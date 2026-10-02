@@ -29,6 +29,7 @@ type AuthService interface {
 
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAllDevices(ctx context.Context, userID uuid.UUID) error
+	GetActiveSessions(ctx context.Context, userID uuid.UUID, refreshToken string) ([]SessionResponse, error)
 }
 
 type authService struct {
@@ -369,4 +370,29 @@ func (s *authService) LogoutAllDevices(ctx context.Context, userID uuid.UUID) er
 		return fmt.Errorf("failed to logout from all devices: %w", err)
 	}
 	return nil
+}
+
+// GetActiveSessions fetches the list of active session for a user and flag the current session
+func (s *authService) GetActiveSessions(ctx context.Context, userID uuid.UUID, refreshToken string) ([]SessionResponse, error) {
+	sessions, err := s.repo.GetActiveSessions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var sessionResponse []SessionResponse
+	for _, session := range *sessions {
+
+		isCurrentSession := hash.CheckString(refreshToken, session.HashedToken)
+
+		resp := SessionResponse{
+			SessionID:  session.ID.String(),
+			DeviceInfo: session.DeviceInfo,
+			IsCurrent:  isCurrentSession,
+			CreatedAt:  session.CreatedAt,
+		}
+
+		sessionResponse = append(sessionResponse, resp)
+	}
+
+	return sessionResponse, nil
 }
