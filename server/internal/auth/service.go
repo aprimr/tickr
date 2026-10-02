@@ -30,6 +30,7 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAllDevices(ctx context.Context, userID uuid.UUID) error
 	GetActiveSessions(ctx context.Context, userID uuid.UUID, refreshToken string) ([]SessionResponse, error)
+	DeleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error
 }
 
 type authService struct {
@@ -395,4 +396,14 @@ func (s *authService) GetActiveSessions(ctx context.Context, userID uuid.UUID, r
 	}
 
 	return sessionResponse, nil
+}
+
+// DeleteSession revokes a specific session for a user
+func (s *authService) DeleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	err := s.repo.DeleteSessionByID(ctx, userID, sessionID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

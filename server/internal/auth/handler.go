@@ -12,6 +12,8 @@ import (
 	er "github.com/aprimr/tickr/internal/pkg/errors"
 	"github.com/aprimr/tickr/internal/pkg/response"
 	"github.com/aprimr/tickr/internal/utils/jwt"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type AuthHandler interface {
@@ -29,6 +31,7 @@ type AuthHandler interface {
 	HandleLogout(w http.ResponseWriter, r *http.Request)
 	HandleLogoutAllDevices(w http.ResponseWriter, r *http.Request)
 	HandleGetActiveSessions(w http.ResponseWriter, r *http.Request)
+	HandleDeleteSession(w http.ResponseWriter, r *http.Request)
 }
 
 type authHandler struct {
@@ -346,4 +349,37 @@ func (h *authHandler) HandleGetActiveSessions(w http.ResponseWriter, r *http.Req
 	}
 
 	response.JSON(w, http.StatusOK, "sessions fetched successfully", sessions)
+}
+
+// HandleDeleteSession deletes a specific session by its ID
+func (h *authHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	// Get session id from URL params
+	// (e.g., /auth/sessions/123-abc)
+	sessionIDStr := chi.URLParam(r, "sessionID")
+	if sessionIDStr == "" {
+		response.Error(w, http.StatusBadRequest, "session id is required", nil)
+		return
+	}
+
+	// Convert SessionIdStr to UUID
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid session id format", nil)
+		return
+	}
+
+	err = h.service.DeleteSession(r.Context(), userID, sessionID)
+	if err != nil {
+		h.log.Error("delete session failed", "error", err, "user_id", userID, "session_id", sessionID)
+		response.Error(w, http.StatusInternalServerError, er.ErrInternalError.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "session delete successful", nil)
 }

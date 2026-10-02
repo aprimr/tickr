@@ -31,6 +31,7 @@ type AuthRepository interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error
 	GetActiveSessions(ctx context.Context, userID uuid.UUID) (*[]Session, error)
+	DeleteSessionByID(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error
 }
 
 type authRepository struct {
@@ -485,4 +486,19 @@ func (r *authRepository) GetActiveSessions(ctx context.Context, userID uuid.UUID
 	}
 
 	return &sessions, nil
+}
+
+// DeleteSessionByID deletes a specific session, ensuring it belongs to the user.
+func (r *authRepository) DeleteSessionByID(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	query := `
+			DELETE FROM refresh_tokens
+			WHERE id = $1 AND user_id = $2
+    `
+
+	_, err := r.db.Exec(ctx, query, sessionID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete session by id: %w", err)
+	}
+
+	return nil
 }
