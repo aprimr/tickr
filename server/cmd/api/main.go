@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/aprimr/tickr/internal/auth"
+	"github.com/aprimr/tickr/internal/cache"
 	"github.com/aprimr/tickr/internal/db"
 	"github.com/aprimr/tickr/internal/email"
 	"github.com/aprimr/tickr/internal/health"
@@ -35,6 +36,18 @@ func main() {
 	// Root context for server shutdown signal
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Get Redis address env
+	redisAddr := os.Getenv("REDIS_ADDRESS")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+
+	// Init new cache client
+	cache, err := cache.NewRedisClient(redisAddr, "", 0)
+	if err != nil {
+		log.Fatalf("failed to init cache client: %v", err)
+	}
 
 	// Init worker pool
 	workerPool := worker.NewPool(100, logger)
@@ -63,7 +76,7 @@ func main() {
 
 	// Auth Route Dependencies
 	authRepo := auth.NewAuthRepository(dbPool)
-	authService := auth.NewAuthService(authRepo, mailer)
+	authService := auth.NewAuthService(authRepo, mailer, cache)
 	authHandler := auth.NewAuthHandler(authService, logger)
 
 	// Health Route Dependency
