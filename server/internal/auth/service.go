@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aprimr/tickr/internal/cache"
 	"github.com/aprimr/tickr/internal/domain"
 	"github.com/aprimr/tickr/internal/email"
 	"github.com/aprimr/tickr/internal/utils/hash"
 	"github.com/aprimr/tickr/internal/utils/jwt"
 	"github.com/aprimr/tickr/internal/utils/otp"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type AuthService interface {
@@ -36,12 +36,14 @@ type AuthService interface {
 type authService struct {
 	repo   AuthRepository
 	mailer email.EmailService
+	cache  *cache.CacheClient
 }
 
-func NewAuthService(repo AuthRepository, mailer email.EmailService) AuthService {
+func NewAuthService(repo AuthRepository, mailer email.EmailService, cache *cache.CacheClient) AuthService {
 	return &authService{
 		repo:   repo,
 		mailer: mailer,
+		cache:  cache,
 	}
 }
 
@@ -115,14 +117,14 @@ func (s *authService) RegisterUser(ctx context.Context, req UserRegisterRequest)
 		return uuid.Nil, err
 	}
 
-	// Hash OTP
-	hashedOTP, err := hash.String(otpString)
+	// Call repository to create user
+	userID, err := s.repo.CreateUser(ctx, req, hashedPassword)
 	if err != nil {
 		return uuid.Nil, err
 	}
 
-	// Call repository to create user
-	userID, err := s.repo.CreateUser(ctx, req, hashedPassword, hashedOTP)
+	// Store OTP in redis
+	err = s.cache.StoreOTP(ctx, domain.OTPTypeAccountVerification, userID.String(), otpString)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -147,14 +149,14 @@ func (s *authService) RegisterVenueAdmin(ctx context.Context, req VenueRegisterR
 		return uuid.Nil, err
 	}
 
-	// Hash OTP
-	hashedOTP, err := hash.String(otpString)
+	// Call repository
+	userID, err := s.repo.CreateVenueAdmin(ctx, req, hashedPassword)
 	if err != nil {
 		return uuid.Nil, err
 	}
 
-	// Call repository
-	userID, err := s.repo.CreateVenueAdmin(ctx, req, hashedPassword, hashedOTP)
+	// Store OTP in redis
+	err = s.cache.StoreOTP(ctx, domain.OTPTypeAccountVerification, userID.String(), otpString)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -167,23 +169,14 @@ func (s *authService) RegisterVenueAdmin(ctx context.Context, req VenueRegisterR
 
 // VerifyUserAccount handles the user's email verification
 func (s *authService) VerifyUserAccount(ctx context.Context, req VerifyAccountRequest) error {
-	// Fetch the active OTP from database
-	otpRecord, err := s.repo.GetActiveOTP(ctx, req.UserID, domain.OTPTypeAccountVerification)
+	// Get OTP from redis
+	err := s.cache.VerifyOTP(ctx, domain.OTPTypeAccountVerification, req.UserID.String(), req.OTP)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrInvalidOrExpiredOTP
-		}
 		return err
 	}
 
-	// Compare plain OTP with the hashedOTP
-	match := hash.CheckString(req.OTP, otpRecord.HashedOTP)
-	if !match {
-		return ErrInvalidOrExpiredOTP
-	}
-
 	// Mark OTP as used and verify user account
-	err = s.repo.MarkOTPAsUsedAndVerifyUser(ctx, otpRecord.ID, req.UserID)
+	err = s.repo.VerifyUserAccount(ctx, req.UserID)
 	if err != nil {
 		return err
 	}
@@ -206,8 +199,11 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 	}
 
 	// If any active otp, return error, ignore the returned error
-	otpRecord, _ := s.repo.GetActiveOTP(ctx, userDetail.ID, domain.OTPTypeForgotPassword)
-	if otpRecord != nil {
+	exists, err := s.cache.OTPExists(ctx, domain.OTPTypeForgotPassword, req.Email)
+	if err != nil {
+		return fmt.Errorf("failed to check active otp: %w", err)
+	}
+	if exists {
 		return fmt.Errorf("%w", ErrActiveOTPAlreadyExists)
 	}
 
@@ -217,16 +213,10 @@ func (s *authService) ForgotPassword(ctx context.Context, req ForgotPasswordRequ
 		return fmt.Errorf("failed to generate otp: %w", err)
 	}
 
-	// Hash OTP
-	hashedOTP, err := hash.BcryptString(otp)
+	// Store OTP in redis
+	err = s.cache.StoreOTP(ctx, domain.OTPTypeForgotPassword, userDetail.Email, otp)
 	if err != nil {
-		return fmt.Errorf("failed to hash otp: %w", err)
-	}
-
-	// Store OTP in the database
-	err = s.repo.StoreOTP(ctx, userDetail.ID, hashedOTP, domain.OTPTypeForgotPassword)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to store otp: %w", err)
 	}
 
 	// Send email
@@ -252,16 +242,12 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 		return err
 	}
 
-	// Fetch active `forgot_password` OTP
-	otp, err := s.repo.GetActiveOTP(ctx, userDetail.ID, domain.OTPTypeForgotPassword)
-	if err != nil {
+	// Verify OTP from cache
+	if err := s.cache.VerifyOTP(ctx, domain.OTPTypeForgotPassword, userDetail.Email, req.OTP); err != nil {
+		if errors.Is(err, cache.ErrInvalidOTP) {
+			return fmt.Errorf("%w", ErrInvalidOrExpiredOTP)
+		}
 		return err
-	}
-
-	// Compare OTP
-	match := hash.CheckBcryptString(req.OTP, otp.HashedOTP)
-	if !match {
-		return fmt.Errorf("%w", ErrInvalidOrExpiredOTP)
 	}
 
 	// Hash new password
@@ -271,7 +257,7 @@ func (s *authService) ResetPassword(ctx context.Context, req ResetPasswordReques
 	}
 
 	// Set new password
-	err = s.repo.ResetPasswordRevokeSessionsAndUseOTP(ctx, userDetail.ID, otp.ID, hashedPassword)
+	err = s.repo.ResetPasswordAndRevokeSessions(ctx, userDetail.ID, hashedPassword)
 	if err != nil {
 		return err
 	}

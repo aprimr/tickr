@@ -17,13 +17,11 @@ type AuthRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdateLastLoginAndStoreRefreshToken(ctx context.Context, userID uuid.UUID, hashedToken, deviceInfo string) error
 
-	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
-	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error)
+	CreateUser(ctx context.Context, req UserRegisterRequest, password_hash string) (uuid.UUID, error)
+	CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash string) (uuid.UUID, error)
 
-	StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error
-	GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*domain.OTP, error)
-	MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error
-	ResetPasswordRevokeSessionsAndUseOTP(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error
+	VerifyUserAccount(ctx context.Context, userID uuid.UUID) error
+	ResetPasswordAndRevokeSessions(ctx context.Context, userID uuid.UUID, hashedPassword string) error
 
 	GetRefreshTokenByItsHash(ctx context.Context, hashedToken string) (*domain.RefreshToken, error)
 	DeleteOldAndCreateNewRefreshToken(ctx context.Context, oldTokenID, userID uuid.UUID, newRefreshHash, deviceInfo string) error
@@ -121,7 +119,7 @@ func (r *authRepository) UpdateLastLoginAndStoreRefreshToken(ctx context.Context
 }
 
 // CreateUser handles user registration transaction for end users
-func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error) {
+func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest, password_hash string) (uuid.UUID, error) {
 	// Begin database transction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -156,17 +154,6 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 		return uuid.Nil, fmt.Errorf("failed to insert user details: %w", err)
 	}
 
-	// Insert hashedOtp in the otps table
-	insertOTP := `
-		INSERT INTO otps (user_id, hashed_otp, type, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err = tx.Exec(ctx, insertOTP, userID, otp_hash, domain.OTPTypeAccountVerification, time.Now().Add(15*time.Minute))
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to insert otp: %w", err)
-	}
-
 	// Commit transaction
 	err = tx.Commit(ctx)
 	if err != nil {
@@ -177,7 +164,7 @@ func (r *authRepository) CreateUser(ctx context.Context, req UserRegisterRequest
 }
 
 // CreateVenueAdmin handles the registration for the venue admin
-func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash, otp_hash string) (uuid.UUID, error) {
+func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegisterRequest, password_hash string) (uuid.UUID, error) {
 	// Begin database transction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -212,17 +199,6 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 		return uuid.Nil, fmt.Errorf("failed to insert venue details: %w", err)
 	}
 
-	// Insert hashedOtp in the otps table
-	insertOTP := `
-		INSERT INTO otps (user_id, hashed_otp, type, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err = tx.Exec(ctx, insertOTP, userID, otp_hash, domain.OTPTypeAccountVerification, time.Now().Add(15*time.Minute))
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to insert otp: %w", err)
-	}
-
 	// Commit transaction
 	err = tx.Commit(ctx)
 	if err != nil {
@@ -232,83 +208,18 @@ func (r *authRepository) CreateVenueAdmin(ctx context.Context, req VenueRegister
 	return userID, nil
 }
 
-// StoreOTP handles the creation of new OTP record in the db
-func (r *authRepository) StoreOTP(ctx context.Context, userID uuid.UUID, otpHash string, otpType domain.OTPType) error {
-	expiresAt := time.Now().Add(15 * time.Minute)
-	query := `
-		INSERT INTO otps
-		(user_id, hashed_otp, type, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err := r.db.Exec(ctx, query, userID, otpHash, otpType, expiresAt)
-	if err != nil {
-		return fmt.Errorf("failed to store otp: %w", err)
-	}
-
-	return nil
-}
-
-// GetActiveOTP fetches the newest unexpired, unused OTP record for a user
-func (r *authRepository) GetActiveOTP(ctx context.Context, userID uuid.UUID, otpType domain.OTPType) (*domain.OTP, error) {
-	query := `
-		SELECT id, user_id, hashed_otp, type, is_used, expires_at, created_at 
-		FROM otps 
-		WHERE user_id = $1 AND type = $2 AND is_used = FALSE AND expires_at > NOW()
-		ORDER BY created_at DESC
-		LIMIT 1
-	`
-
-	var o domain.OTP
-
-	err := r.db.QueryRow(ctx, query, userID, otpType).Scan(
-		&o.ID,
-		&o.UserID,
-		&o.HashedOTP,
-		&o.Type,
-		&o.IsUsed,
-		&o.ExpiresAt,
-		&o.CreatedAt,
-	)
-	if err != nil {
-		// If no records found in the db, return invalid or expired otp error
-		return nil, fmt.Errorf("failed to fetch otp : %w", err)
-	}
-
-	return &o, nil
-}
-
-// MarkOTPAsUsedAndVerifyUser handles the verfication of user email and mark OTP as used
-func (r *authRepository) MarkOTPAsUsedAndVerifyUser(ctx context.Context, otpID uuid.UUID, userID uuid.UUID) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Mark OTP as used
-	_, err = tx.Exec(ctx, `UPDATE otps SET is_used = TRUE WHERE id = $1`, otpID)
-	if err != nil {
-		return fmt.Errorf("failed to update otp status: %w", err)
-	}
-
-	// Mark user email as verified
-	_, err = tx.Exec(ctx, `UPDATE users SET is_email_verified = TRUE WHERE id = $1`, userID)
+// VerifyUserAccount handles the verfication of user account if email is verified
+func (r *authRepository) VerifyUserAccount(ctx context.Context, userID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET is_email_verified = TRUE WHERE id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to verify user email status: %w", err)
-	}
-
-	// Commit transaction
-	err = tx.Commit(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
 }
 
 // ResetPasswordRevokeSessionsAndUseOTP updates the user's password, marks them verified, revokes all the sessions and invalidates the OTP atomically
-func (r *authRepository) ResetPasswordRevokeSessionsAndUseOTP(ctx context.Context, userID uuid.UUID, otpID uuid.UUID, hashedPassword string) error {
+func (r *authRepository) ResetPasswordAndRevokeSessions(ctx context.Context, userID uuid.UUID, hashedPassword string) error {
 	// 1. Begin a database transaction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -338,17 +249,6 @@ func (r *authRepository) ResetPasswordRevokeSessionsAndUseOTP(ctx context.Contex
 	_, err = tx.Exec(ctx, sessionQuery, userID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke user session: %w", err)
-	}
-
-	// Update OTP status as used
-	otpQuery := `
-		UPDATE otps
-		SET is_used = TRUE
-		WHERE id = $1
-	`
-	_, err = tx.Exec(ctx, otpQuery, otpID)
-	if err != nil {
-		return fmt.Errorf("failed to update otp status: %w", err)
 	}
 
 	// Commit  transaction
